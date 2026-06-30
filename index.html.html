@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>活動行程表 Web App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'app-blue': '#EBF5FB',
+                        'app-green': '#E8F8F5',
+                        'app-dark': '#2C3E50',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* 隱藏滾動條但保持可滾動 */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        /* 玻璃透視感 */
+        .glass {
+            background: rgba(255, 255, 255, 0.65);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        body {
+            background-color: #f0f4f8; /* 整個外層底色 */
+        }
+        .app-container {
+            max-width: 480px;
+            margin: 0 auto;
+            background: linear-gradient(135deg, #EBF5FB 0%, #E8F8F5 100%);
+            min-height: 100vh;
+            position: relative;
+            box-shadow: 0 0 20px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body class="text-gray-800 antialiased font-sans">
+
+<div id="app" class="app-container flex flex-col h-screen">
+    
+    <header class="relative h-[250px] shrink-0">
+        <div class="absolute inset-0 bg-cover bg-center" style="background-image: url('哈哈營.jpg'); background-color: #d1e8e2;"></div>
+        
+        <div class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
+
+        <div class="absolute bottom-[50px] right-4 flex gap-3 z-20">
+            <button @click="activeTab = 'itinerary'" :class="{'bg-white/90 text-blue-500': activeTab === 'itinerary', 'glass text-gray-700': activeTab !== 'itinerary'}" class="w-10 h-10 rounded-full flex items-center justify-center shadow transition">
+                <i class="fa-solid fa-map-location-dot"></i>
+            </button>
+            <button @click="activeTab = 'info'" :class="{'bg-white/90 text-blue-500': activeTab === 'info', 'glass text-gray-700': activeTab !== 'info'}" class="w-10 h-10 rounded-full flex items-center justify-center shadow transition">
+                <i class="fa-solid fa-circle-info"></i>
+            </button>
+            <button @click="activeTab = 'weather'" :class="{'bg-white/90 text-blue-500': activeTab === 'weather', 'glass text-gray-700': activeTab !== 'weather'}" class="w-10 h-10 rounded-full flex items-center justify-center shadow transition">
+                <i class="fa-solid fa-cloud-sun"></i>
+            </button>
+            <button @click="activeTab = 'map'" :class="{'bg-white/90 text-blue-500': activeTab === 'map', 'glass text-gray-700': activeTab !== 'map'}" class="w-10 h-10 rounded-full flex items-center justify-center shadow transition">
+                <i class="fa-solid fa-location-dot"></i>
+            </button>
+        </div>
+    </header>
+
+    <main class="relative z-10 flex-1 bg-gradient-to-br from-app-blue/90 to-app-green/90 rounded-t-[2.5rem] -mt-8 px-5 pt-8 pb-20 overflow-y-auto no-scrollbar shadow-[0_-10px_20px_rgba(0,0,0,0.05)] backdrop-blur-md">
+        
+        <div v-show="activeTab === 'itinerary'" class="animate-fade-in">
+            
+            <div class="flex overflow-x-auto no-scrollbar gap-4 mb-6">
+                <div v-for="date in dates" :key="date.full" 
+                     @click="selectedDate = date.full"
+                     :class="{'bg-blue-500 text-white shadow-md': selectedDate === date.full, 'bg-white text-gray-500': selectedDate !== date.full}"
+                     class="min-w-[70px] rounded-2xl py-3 flex flex-col items-center justify-center cursor-pointer transition">
+                    <span class="text-xl font-bold">{{ date.day }}</span>
+                    <span class="text-sm font-medium mt-1">{{ date.date }}</span>
+                </div>
+            </div>
+
+            <div class="flex justify-between items-end mb-4">
+                <div class="relative">
+                    <select v-model="filterType" class="appearance-none bg-white/80 border-none rounded-full px-4 py-2 pr-8 text-sm text-gray-700 shadow-sm focus:ring-2 focus:ring-blue-200 outline-none">
+                        <option value="All">全部行程</option>
+                        <option value="景點">景點</option>
+                        <option value="住宿">住宿</option>
+                        <option value="美食">美食</option>
+                        <option value="乘車資訊">乘車資訊</option>
+                        <option value="其他">其他</option>
+                    </select>
+                    <i class="fa-solid fa-chevron-down absolute right-3 top-3 text-xs text-gray-400 pointer-events-none"></i>
+                </div>
+                
+                <div class="glass px-4 py-2 rounded-2xl flex items-center gap-2">
+                    <i class="fa-solid fa-sun text-yellow-500 text-lg"></i>
+                    <div class="text-sm">
+                        <div class="font-bold text-gray-700">26°C</div>
+                        <div class="text-xs text-gray-500">體感 28°C</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="itinerary-list" class="space-y-0 relative">
+                <div v-for="(item, index) in filteredItinerary" :key="item.id" class="itinerary-item relative pb-6" :data-id="item.id">
+                    
+                    <div v-if="index < filteredItinerary.length - 1" class="absolute left-[23px] top-[60px] bottom-[-10px] w-0.5 bg-blue-200 z-0"></div>
+                    
+                    <div class="flex gap-4 relative z-10">
+                        <div class="flex flex-col items-center min-w-[50px]">
+                            <div class="w-12 h-12 rounded-full bg-white shadow-sm flex items-center justify-center text-blue-400 text-xl border-2 border-app-blue cursor-grab">
+                                <i :class="getIcon(item.type)"></i>
+                            </div>
+                        </div>
+
+                        <div @click="openNav(item.location)" :class="{'bg-blue-50 border border-blue-100': index === 0 && item.category === '乘車資訊', 'bg-white': !(index === 0 && item.category === '乘車資訊')}" class="flex-1 rounded-2xl p-4 shadow-sm hover:shadow-md transition cursor-pointer relative overflow-hidden">
+                            <div class="text-xs text-blue-500 font-bold mb-1"><i class="fa-regular fa-clock mr-1"></i>{{ item.time }}</div>
+                            <h3 class="text-gray-800 font-bold text-lg mb-1">{{ item.title }}</h3>
+                            <p class="text-gray-500 text-sm whitespace-pre-line leading-relaxed">{{ item.desc }}</p>
+                            
+                            <div class="absolute right-3 bottom-3 text-gray-300">
+                                <i class="fa-solid fa-diamond-turn-right"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div v-if="index < filteredItinerary.length - 1" class="ml-[14px] my-1 flex items-center gap-2 relative z-10 py-1">
+                        <div class="bg-blue-100 text-blue-600 text-xs rounded-full px-2 py-0.5 flex items-center gap-1 shadow-sm border border-white">
+                            <i class="fa-solid fa-bus text-[10px]"></i> {{ item.transitTime }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <button class="absolute bottom-6 right-6 w-14 h-14 bg-blue-500 text-white rounded-full shadow-lg flex items-center justify-center text-2xl hover:bg-blue-600 transition z-50">
+                <i class="fa-solid fa-plus"></i>
+            </button>
+        </div>
+
+        <div v-show="activeTab === 'info'" class="animate-fade-in space-y-5">
+            <h2 class="text-xl font-bold text-gray-800 border-b-2 border-blue-200 pb-2 inline-block">乘車資訊</h2>
+            <div class="bg-white rounded-2xl p-5 shadow-sm">
+                <div class="flex items-center gap-3 mb-3">
+                    <div class="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-500">
+                        <i class="fa-regular fa-calendar-check"></i>
+                    </div>
+                    <div>
+                        <div class="text-xs text-gray-400">日期</div>
+                        <div class="font-bold text-gray-700">2026/04/24 (星期五)</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center text-green-500">
+                        <i class="fa-solid fa-location-dot"></i>
+                    </div>
+                    <div>
+                        <div class="text-xs text-gray-400">集合地點</div>
+                        <div class="font-bold text-gray-700">清水國中校內</div>
+                    </div>
+                </div>
+            </div>
+
+            <h2 class="text-xl font-bold text-gray-800 border-b-2 border-blue-200 pb-2 inline-block mt-4">住宿資訊</h2>
+            <div class="bg-white rounded-2xl p-5 shadow-sm relative overflow-hidden">
+                <div class="absolute top-0 right-0 bg-blue-500 text-white text-xs px-3 py-1 rounded-bl-lg">1日遊無住宿</div>
+                <h3 class="font-bold text-lg text-gray-800 mb-1">本次為當日來回行程</h3>
+                <p class="text-sm text-gray-500">如有變更，將隨時更新飯店名稱、電話與住址導航連結於此處。</p>
+            </div>
+        </div>
+
+        <div v-show="activeTab === 'weather'" class="animate-fade-in flex flex-col items-center justify-center h-64 opacity-60">
+            <i class="fa-solid fa-cloud-sun-rain text-5xl text-gray-400 mb-3"></i>
+            <p>詳細天氣預報介面</p>
+        </div>
+        <div v-show="activeTab === 'map'" class="animate-fade-in flex flex-col items-center justify-center h-64 opacity-60">
+            <i class="fa-solid fa-map-location-dot text-5xl text-gray-400 mb-3"></i>
+            <p>Google Map 總覽介面</p>
+        </div>
+
+    </main>
+</div>
+
+<script>
+    const { createApp, ref, computed, onMounted } = Vue;
+
+    createApp({
+        setup() {
+            const activeTab = ref('itinerary');
+            const filterType = ref('All');
+            const selectedDate = ref('2026-04-24');
+            
+            const dates = ref([
+                { day: 'Thu', date: '23', full: '2026-04-23' },
+                { day: 'Fri', date: '24', full: '2026-04-24' },
+                { day: 'Sat', date: '25', full: '2026-04-25' }
+            ]);
+
+            const itinerary = ref([
+                { 
+                    id: 1, 
+                    type: 'meeting', 
+                    category: '乘車資訊',
+                    time: '07:30-07:50', 
+                    title: '報到 / 集合上車', 
+                    desc: '*報到清點班人數\n*未到名單確認', 
+                    location: '臺中市立清水國民中學',
+                    transitTime: '出發點'
+                },
+                { 
+                    id: 2, 
+                    type: 'warning', 
+                    category: '其他',
+                    time: '07:50-08:00', 
+                    title: '實施逃生演練', 
+                    desc: '*實施行前安全教育及安全宣導\n*實際操作安全逃生演練\n*各車回報無誤，車隊出發', 
+                    location: '臺中市立清水國民中學',
+                    transitTime: '10 分鐘 (車程)'
+                },
+                { 
+                    id: 3, 
+                    type: 'bus', 
+                    category: '乘車資訊',
+                    time: '08:00-09:30', 
+                    title: '國道風光～中途小憩', 
+                    desc: '*播放逃生簡介 CD\n*發放學生手冊、礦泉水及識別牌', 
+                    location: '國道',
+                    transitTime: '1.5 小時 (車程)'
+                },
+                { 
+                    id: 4, 
+                    type: 'ticket', 
+                    category: '景點',
+                    time: '09:30-14:30', 
+                    title: '暢遊探索六福村主題樂園', 
+                    desc: '美國大西部、南太平洋、阿拉伯皇宮、非洲部落。\n<午餐發放餐券於園區內享用>', 
+                    location: '六福村主題遊樂園',
+                    transitTime: '5 小時 (園區停留)'
+                },
+                { 
+                    id: 5, 
+                    type: 'bus', 
+                    category: '乘車資訊',
+                    time: '14:30-16:30', 
+                    title: '回程風光 / 中途小憩', 
+                    desc: '~快樂賦歸學校~\n(預計 16:30 前到校)', 
+                    location: '臺中市立清水國民中學',
+                    transitTime: '2 小時 (車程)'
+                }
+            ]);
+
+            const filteredItinerary = computed(() => {
+                if (filterType.value === 'All') return itinerary.value;
+                return itinerary.value.filter(item => item.category === filterType.value);
+            });
+
+            const getIcon = (type) => {
+                const icons = {
+                    'meeting': 'fa-solid fa-users',
+                    'warning': 'fa-solid fa-triangle-exclamation',
+                    'bus': 'fa-solid fa-bus-simple',
+                    'ticket': 'fa-solid fa-ticket',
+                    'food': 'fa-solid fa-utensils',
+                    'hotel': 'fa-solid fa-bed'
+                };
+                return icons[type] || 'fa-solid fa-location-dot';
+            };
+
+            const openNav = (location) => {
+                if(!location || location === '國道') return;
+                const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(location)}`;
+                window.open(url, '_blank');
+            };
+
+            onMounted(() => {
+                // 初始化拖曳功能
+                const el = document.getElementById('itinerary-list');
+                if (el) {
+                    Sortable.create(el, {
+                        animation: 150,
+                        ghostClass: 'opacity-50',
+                        onEnd: (evt) => {
+                            // 更新陣列排序邏輯可在此實作
+                            const itemEl = itinerary.value.splice(evt.oldIndex, 1)[0];
+                            itinerary.value.splice(evt.newIndex, 0, itemEl);
+                        }
+                    });
+                }
+            });
+
+            return {
+                activeTab,
+                filterType,
+                selectedDate,
+                dates,
+                filteredItinerary,
+                getIcon,
+                openNav
+            }
+        }
+    }).mount('#app')
+</script>
+
+<style>
+    /* 簡易的淡入動畫 */
+    .animate-fade-in {
+        animation: fadeIn 0.4s ease-out forwards;
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+</style>
+</body>
+</html>
